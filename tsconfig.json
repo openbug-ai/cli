@@ -1,0 +1,30 @@
+{
+    "compileOnSave": false,
+    "compilerOptions": {
+      "module": "NodeNext",
+      "target": "ES2020",
+      "lib": ["ES2020", "DOM"],
+      "typeRoots": ["node_modules/@types"],
+      "allowSyntheticDefaultImports": true,
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true,
+      "forceConsistentCasingInFileNames": true,
+      "moduleResolution": "NodeNext",
+      "pretty": true,
+      "sourceMap": true,
+      "skipLibCheck": true,
+      "declaration": true,
+      "outDir": "dist",
+      "allowJs": true,
+      "noEmit": false,
+      "esModuleInterop": true,
+      "resolveJsonModule": true,
+      "importHelpers": true,
+      "baseUrl": "src",
+      "jsx": "react-jsx",
+      "types": ["node"]
+    },
+    "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["dist", "node_modules"]
+  }
+  

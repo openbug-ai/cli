@@ -1,0 +1,31 @@
+# Source files (TypeScript)
+*.ts
+*.tsx
+tsconfig.json
+
+# Development files
+.gitignore
+postinstall.js
+code_hierarchy.ts
+index.tsx
+
+# Test files
+tests/
+test-app/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build artifacts
+*.tgz
