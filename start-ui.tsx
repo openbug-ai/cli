@@ -486,7 +486,7 @@ export const StartApp: React.FC = () => {
 
         if (!metadataForFetch && activeProject) {
           metadataForFetch = {
-            id: "oncall-service",
+            id: "openbug-service",
             path: activeProject.path || process.cwd(),
           };
         }
