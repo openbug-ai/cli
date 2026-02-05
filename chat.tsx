@@ -10,17 +10,12 @@ import path from "path";
 import { fetchProjectsFromCluster, logd } from "./helpers/cli-helpers.js";
 import { config } from "./config.js";
 import logsManager from "./logsManager.js";
+import type { CoreMessage } from "./coreMessages.js";
 import {
-  HumanMessage,
-  BaseMessage,
-  mapChatMessagesToStoredMessages,
-  mapStoredMessagesToChatMessages,
-} from "@langchain/core/messages";
-import {
-  cleanMessagesContent,
   extractMessageContent,
   groupMessageChunks,
-} from "./utils.js";
+  getAssistantDisplayContent,
+} from "./coreMessages.js";
 
 type ClusterProject = {
   path: string;
@@ -83,7 +78,7 @@ function buildArchitecture(projects: ClusterProject[]): string {
 
 const ChatApp: React.FC = () => {
   const { stdout } = useStdout();
-  const [visibleChats, setVisibleChats] = useState<BaseMessage[]>([]);
+  const [visibleChats, setVisibleChats] = useState<CoreMessage[]>([]);
   const [input, setInput] = useState("");
   const [services, setServices] = useState<ClusterProject[]>([]);
   const [activeService, setActiveService] = useState<ClusterProject | null>(
@@ -95,8 +90,11 @@ const ChatApp: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const graphStateRef = useRef<any>(null);
-  const [graphState, setGraphState] = useState<any>(null);
+  const graphStateRef = useRef<{ messages: CoreMessage[]; logs?: string; architecture?: string } | null>(null);
+  const [graphState, setGraphState] = useState<{ messages: CoreMessage[]; logs?: string; architecture?: string } | null>(null);
+  const messagesSentRef = useRef<CoreMessage[]>([]);
+  const streamTextRef = useRef<string>("");
+  const streamToolCallsRef = useRef<Array<{ toolCallId: string; toolName: string; args: unknown }>>([]);
 
   useEffect(() => {
     graphStateRef.current = graphState;
@@ -177,61 +175,54 @@ const ChatApp: React.FC = () => {
 
           const data = JSON.parse(text);
 
-          // Handle response messages exactly like the original useWebSocket
-          if (data.type === "response") {
-            let messages = data.data.messages ? data.data.messages : [];
-            messages = mapStoredMessagesToChatMessages(messages);
-
-            switch (data.data.type) {
-              case "messages":
-                if (
-                  data.data.sender !== "toolNode" &&
-                  data.data.sender !== "routerNode"
-                ) {
-                  const cleanedMessages = cleanMessagesContent(messages);
-                  setVisibleChats((old) => [...old, ...cleanedMessages]);
-                }
-                break;
-
-              case "values":
-                if (data.data.state) {
-                  logd(`[chat] Received values state update: ${data.data.state.messages?.length || 0} messages`);
-                  if (data.data.state.messages?.length > 0) {
-                    const lastMsg = data.data.state.messages[data.data.state.messages.length - 1];
-                    if (lastMsg?.tool_calls) {
-                      logd(`[chat] Last message has ${lastMsg.tool_calls.length} tool_calls`);
-                    }
-                  }
-                  setGraphState(data.data.state);
-                }
-                break;
-
-              case "updates":
-                // Update graphState if state is provided in updates
-                if (data.data.state) {
-                  logd(`[chat] Received updates state: ${data.data.state.messages?.length || 0} messages`);
-                  setGraphState(data.data.state);
-                }
-                if (
-                  data.data.sender !== "toolNode" &&
-                  data.data.sender !== "routerNode"
-                ) {
-                  const cleanedMessages = cleanMessagesContent(messages);
-                  setVisibleChats((old) => [...old, ...cleanedMessages]);
-                }
-                if (data.data.sender === "answerNode") {
-                  const cleanedMessages = cleanMessagesContent(messages);
-                  setVisibleChats((prev) => [...prev, ...cleanedMessages]);
-                  setIsLoading(false);
-                }
-                if (data.data.sender === "userNode") {
-                  setIsLoading(false);
-                }
-                break;
-
-              default:
-                break;
+          // AI SDK stream: accumulate parts and on finish append assistant message
+          if (data.type === "response" && data.data?.stream === "ai-sdk") {
+            const partType = data.data.partType as string;
+            if (partType === "text-delta" && typeof data.data.text === "string") {
+              streamTextRef.current += data.data.text;
+            } else if (partType === "text" && typeof data.data.text === "string") {
+              streamTextRef.current = data.data.text;
+            } else if (partType === "tool-call") {
+              streamToolCallsRef.current.push({
+                toolCallId: String(data.data.toolCallId ?? ""),
+                toolName: String(data.data.toolName ?? ""),
+                args: data.data.args,
+              });
+            } else if (partType === "finish" || partType === "finish-step") {
+              const text = streamTextRef.current;
+              const toolCalls = streamToolCallsRef.current;
+              const newAssistant: CoreMessage = {
+                role: "assistant",
+                content:
+                  toolCalls.length > 0
+                    ? [
+                        ...(text ? [{ type: "text" as const, text }] : []),
+                        ...toolCalls.map((tc) => ({
+                          type: "tool-call" as const,
+                          toolCallId: tc.toolCallId,
+                          toolName: tc.toolName,
+                          args: tc.args,
+                        })),
+                      ]
+                    : text,
+              };
+              const fullList = [...messagesSentRef.current, newAssistant];
+              setVisibleChats(fullList);
+              setGraphState((prev) => ({
+                messages: fullList,
+                logs: prev?.logs ?? "",
+                architecture: prev?.architecture ?? architecture,
+              }));
+              graphStateRef.current = { messages: fullList, logs: graphStateRef.current?.logs, architecture };
+              setIsLoading(false);
+              streamTextRef.current = "";
+              streamToolCallsRef.current = [];
+            } else if (partType === "error") {
+              setIsLoading(false);
+              streamTextRef.current = "";
+              streamToolCallsRef.current = [];
             }
+            return;
           }
 
           if (data.type === "error" || data.type === "ask_user") {
@@ -266,32 +257,20 @@ const ChatApp: React.FC = () => {
     }
   });
 
-  // Convert BaseMessage[] to displayable lines using the same logic as original
   const chatLines = useMemo(() => {
-    if (!visibleChats || visibleChats.length === 0) {
-      return [];
-    }
+    if (!visibleChats || visibleChats.length === 0) return [];
 
-    // Group messages by ID (same as original)
     const grouped = groupMessageChunks(visibleChats);
 
     return grouped.messages.flatMap((msgs, index) => {
-      // Extract content from message group (same as original)
-      const content = extractMessageContent(msgs);
-      if (!content || content.trim() === "") {
-        return [];
-      }
+      const first = msgs[0];
+      const content =
+        first.role === "assistant"
+          ? getAssistantDisplayContent(first)
+          : extractMessageContent(msgs);
+      if (!content || content.trim() === "") return [];
 
-      // Determine if it's a user or assistant message
-      const msgAny = msgs as any;
-      const msgType =
-        (typeof msgAny[0].getType === "function" && msgAny[0].getType()) ||
-        msgAny[0]._type ||
-        "";
-      const isHuman =
-        msgType === "human" || msgs[0].constructor.name === "HumanMessage";
-
-      // Split content into lines and create display lines
+      const isHuman = first.role === "user";
       const contentLines = content.split("\n");
       return contentLines.map((line, lineIndex) => ({
         key: `chat-${index}-line-${lineIndex}`,
@@ -306,31 +285,23 @@ const ChatApp: React.FC = () => {
     const userText = input.trim();
     setInput("");
 
-    // Add user message to visibleChats immediately
-    const human = new HumanMessage(userText);
-    setVisibleChats((prev) => [...prev, human]);
+    const userMessage: CoreMessage = { role: "user", content: userText };
+    setVisibleChats((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Build query payload (same as original)
-    const messages: BaseMessage[] = visibleChats.length > 0 
-      ? [...visibleChats, human]
-      : [human];
-    
-    const storedMessages = graphState
-      ? mapChatMessagesToStoredMessages([human])
-      : mapChatMessagesToStoredMessages(messages);
+    const messages: CoreMessage[] =
+      visibleChats.length > 0 ? [...visibleChats, userMessage] : [userMessage];
+    const userQueryMessages = graphState ? [userMessage] : messages;
+    messagesSentRef.current = graphState ? [...graphState.messages, userMessage] : messages;
+    streamTextRef.current = "";
+    streamToolCallsRef.current = [];
 
-    // Get logs: backend merges as msg.graphState.logs || msg.userQuery.logs || ""
-    // Note: The chat window runs in a separate process from service CLI instances,
-    // so LogsManager will be empty here. The backend will fetch logs via tool calls
-    // (read_logs, tail_logs, etc.) when needed. This is expected behavior.
-    // If graphState has logs from a previous query, use those; otherwise send empty.
     const currentLogs = logsManager.getLogs() || "";
-    const logs = graphState?.logs || currentLogs;
+    const logs = graphState?.logs ?? currentLogs;
     if (logs.length === 0) {
       logd(`[chat] No logs in payload (expected: chat window is separate process). Backend will fetch via tool calls if needed.`);
     } else {
-      logd(`[chat] Including logs in payload: ${logs.length} characters (from ${graphState?.logs ? 'graphState' : 'LogsManager'})`);
+      logd(`[chat] Including logs in payload: ${logs.length} characters (from ${graphState?.logs ? "graphState" : "LogsManager"})`);
     }
 
     const payload = {
@@ -338,32 +309,19 @@ const ChatApp: React.FC = () => {
       authKey: apiKey,
       serviceId: activeService.window_id,
       userQuery: {
-        messages: storedMessages,
+        messages: userQueryMessages,
         architecture,
-        logs: logs,
+        logs,
         planningDoc: "",
       },
       planningDoc: "",
-      graphState: graphState || undefined,
+      graphState: graphState
+        ? { messages: graphState.messages, logs: graphState.logs, architecture: graphState.architecture }
+        : undefined,
     };
 
-    // Debug logging
     if (graphState) {
-      logd(`[chat] Sending query with graphState: ${graphState.messages?.length || 0} messages in state`);
-      if (graphState.messages?.length > 0) {
-        const lastMsg = graphState.messages[graphState.messages.length - 1];
-        if (lastMsg?.tool_calls) {
-          logd(`[chat] ⚠️  Last state message has ${lastMsg.tool_calls.length} tool_calls`);
-          const toolCallIds = lastMsg.tool_calls.map((tc: any) => tc.id);
-          const toolMessages = graphState.messages.filter((m: any) => 
-            m.type === "tool" || m.lc?.[2] === "ToolMessage"
-          );
-          logd(`[chat] Tool messages in state: ${toolMessages.length} (expected: ${toolCallIds.length})`);
-          if (toolMessages.length < toolCallIds.length) {
-            logd(`[chat] ❌ MISSING TOOL RESPONSES in graphState!`);
-          }
-        }
-      }
+      logd(`[chat] Sending query with graphState: ${graphState.messages?.length ?? 0} messages in state`);
     } else {
       logd(`[chat] Sending query without graphState (first message)`);
     }

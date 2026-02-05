@@ -67,20 +67,23 @@ function shouldCheckVersion() {
   return timeSinceLastCheck >= CACHE_DURATION_MS;
 }
 
+const VERSION_CHECK_TIMEOUT_MS = 3000;
+
 async function fetchMinimumVersion() {
   try {
-    
-    const response = await axios.get(`${API_BASE_URL}/health/minimum-cli-version`);
-
-
+    const response = await axios.get(`${API_BASE_URL}/health/minimum-cli-version`, {
+      timeout: VERSION_CHECK_TIMEOUT_MS,
+    });
     if (response.data?.success && response.data?.minimumCliVersion) {
       return response.data.minimumCliVersion;
     }
   } catch (error) {
-    console.warn(
-      "Failed to check CLI version:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
+    if (error.code !== "ECONNABORTED") {
+      console.warn(
+        "Failed to check CLI version:",
+        error instanceof Error ? error.message : "Unknown error"
+      );
+    }
   }
   return null;
 }

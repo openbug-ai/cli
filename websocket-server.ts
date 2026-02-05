@@ -50,6 +50,8 @@ export class OnCallWebSocketServer {
   private wss: WebSocketServer | null = null;
   private readonly allProjects: ProjectRecord[] = [];
   private readonly logsStorage: Map<number, LogEntry> = new Map();
+  /** Retained logs by project path after disconnect so refetch after restart still returns last run's logs. */
+  private readonly retainedLogsByPath: Map<string, LogEntry> = new Map();
   private readonly activeWindowIds: Set<number> = new Set();
   private readonly subscribedClients: Set<WebSocket> = new Set();
   private readonly socketToProject: Map<WebSocket, { projectId: string; path: string; windowId?: number }> = new Map();
@@ -61,6 +63,7 @@ export class OnCallWebSocketServer {
   private readonly LOG_MAX_SIZE = 10000;
   private readonly LOG_TTL_MS = 30 * 60 * 1000; // 30 minutes - logs expire after inactivity
   private readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Run cleanup every 5 minutes
+  private readonly RETAINED_LOGS_TTL_MS = 10 * 60 * 1000; // 10 minutes - then drop retained logs
 
   constructor(options: OnCallWebSocketServerOptions = {}) {
     this.options = {
@@ -142,6 +145,7 @@ export class OnCallWebSocketServer {
       });
     });
     this.logsStorage.clear();
+    this.retainedLogsByPath.clear();
     this.activeWindowIds.clear();
     // this.options.logger.info("Server stopped.");
   }
@@ -184,6 +188,12 @@ export class OnCallWebSocketServer {
     
     for (const windowId of toDelete) {
       this.logsStorage.delete(windowId);
+    }
+    
+    for (const [path, entry] of this.retainedLogsByPath.entries()) {
+      if (now - entry.lastActivity > this.RETAINED_LOGS_TTL_MS) {
+        this.retainedLogsByPath.delete(path);
+      }
     }
     
     if (toDelete.length > 0) {
@@ -239,6 +249,13 @@ export class OnCallWebSocketServer {
         
         if (removedProject.window_id) {
           this.activeWindowIds.delete(removedProject.window_id);
+          const entry = this.logsStorage.get(removedProject.window_id);
+          if (entry?.logs && removedProject.path) {
+            this.retainedLogsByPath.set(removedProject.path, {
+              logs: entry.logs,
+              lastActivity: Date.now(),
+            });
+          }
           this.logsStorage.delete(removedProject.window_id);
         }
         
@@ -485,12 +502,13 @@ export class OnCallWebSocketServer {
     const existingProject = projectRecord.projects.find(
       (item) => item.path === project.path
     );
+    const windowId = project.window_id!;
     if (existingProject) {
       existingProject.description = project.description;
       if (project.name) {
         existingProject.name = project.name;
       }
-      existingProject.window_id = project.window_id!;
+      existingProject.window_id = windowId;
       existingProject.logs_available = project.logs_available!;
       existingProject.code_available = project.code_available!;
     } else {
@@ -498,10 +516,19 @@ export class OnCallWebSocketServer {
         path: project.path,
         description: project.description,
         name: project.name,
-        window_id: project.window_id!,
+        window_id: windowId,
         logs_available: project.logs_available!,
         code_available: project.code_available!,
       });
+    }
+    // After restart, reattach retained logs for this path to the new window_id so refetch returns last run's logs
+    const retained = this.retainedLogsByPath.get(project.path);
+    if (retained?.logs && windowId) {
+      this.logsStorage.set(windowId, {
+        logs: retained.logs.slice(-this.LOG_MAX_SIZE),
+        lastActivity: Date.now(),
+      });
+      this.retainedLogsByPath.delete(project.path);
     }
 
     // this.options.logger.info(

@@ -19,27 +19,12 @@ import { useWebSocket } from "./useWebSocket.js";
 import { config } from "./config.js";
 import Spinner from "ink-spinner";
 import {
-  AIMessage,
-  AIMessageChunk,
-  BaseMessage,
-  HumanMessage,
-} from "langchain";
-import { SystemMessage } from "@langchain/core/messages";
-import fs from "fs";
-import path from "path";
-import {
   loadProjectMetadata,
   fetchProjectsFromCluster,
   logd,
-  getConfigValue,
 } from "./helpers/cli-helpers.js";
 import WebSocket from "ws";
 import logsManager from "./logsManager.js";
-import { extractMessageContent } from "./utils.js";
-
-const initialAssistantMessage = new SystemMessage(
-  "I'm watching your app run locally. You can ask me about errors, logs, performance,or anything else related to this run."
-);
 
 dotenv.config({ quiet: true });
 
@@ -344,6 +329,8 @@ export const App: React.FC = () => {
   // Cluster server connection for log streaming
   const clusterSocketRef = useRef<WebSocket | null>(null);
   const projectMetadataRef = useRef<any>(null);
+  const [clusterConnected, setClusterConnected] = useState<boolean>(false);
+  const [clusterError, setClusterError] = useState<string | null>(null);
 
   useEffect(() => {
     terminalColsRef.current = terminalCols;
@@ -395,38 +382,41 @@ export const App: React.FC = () => {
     projectMetadataRef.current = metadata;
     
     if (!metadata?.window_id) {
-      // console.log(`[Cluster] Cannot connect to cluster server: metadata.window_id is missing. Metadata:`, metadata);
-      // console.log(`[Cluster] Current working directory: ${process.cwd()}`);
+      setClusterConnected(false);
+      setClusterError("No project registered. Run from a directory with openbug.yaml.");
       return;
     }
 
-    // console.log(`[Cluster] Initializing cluster connection for window_id: ${metadata.window_id}, path: ${metadata.path || process.cwd()}`);
-
-    const clusterUrl = getConfigValue("CLUSTER_URL", "ws://127.0.0.1:4466");
+    setClusterError(null);
+    const clusterUrl = process.env.OPENBUG_CLUSTER_URL || "ws://127.0.0.1:4466";
     try {
       const socket = new WebSocket(clusterUrl);
       clusterSocketRef.current = socket;
 
       socket.onopen = () => {
-        // Connection established, logs will be streamed via onData handler
-        const metadata = projectMetadataRef.current || loadProjectMetadata();
-        // console.log(`[Cluster] ✅ Connected to cluster server for log streaming. window_id: ${metadata?.window_id}, path: ${metadata?.path || process.cwd()}`);
+        setClusterConnected(true);
+        setClusterError(null);
       };
 
-      socket.onerror = (error) => {
-        // Cluster server not available, continue without streaming
-        console.log(`[Cluster] Error connecting to cluster server: ${error}`);
+      socket.onerror = () => {
+        setClusterConnected(false);
+        setClusterError("Connection error. Is OpenBug running? (Run `debug` in another terminal.)");
         clusterSocketRef.current = null;
       };
 
       socket.onclose = () => {
+        setClusterConnected(false);
+        setClusterError("Run `debug` in another terminal to reconnect.");
         clusterSocketRef.current = null;
       };
     } catch (error) {
-      // Cluster server not available, continue without streaming
+      setClusterConnected(false);
+      setClusterError("Failed to connect. Is OpenBug running? (Run `debug` in another terminal.)");
     }
 
     return () => {
+      setClusterConnected(false);
+      setClusterError(null);
       if (clusterSocketRef.current) {
         clusterSocketRef.current.close();
         clusterSocketRef.current = null;
@@ -609,15 +599,22 @@ export const App: React.FC = () => {
     }
   });
 
-  // Simple terminal view - just show logs with native terminal scrolling
   return (
     <Box flexDirection="column" width="100%">
       {logLines.map((line) => {
         const rendered = marked.parseInline(line.text);
         return <Text key={line.key}>{rendered}</Text>;
       })}
+      <Box marginTop={1} paddingY={1}>
+        <Text color="gray" dimColor>
+          OpenBug: {clusterConnected ? "● Connected" : "○ Disconnected"}
+          {clusterError ? ` — ${clusterError}` : ""}
+          {" | "}Ctrl+C to exit
+        </Text>
+      </Box>
     </Box>
   );
 };
 
+console.clear();
 render(<App />);

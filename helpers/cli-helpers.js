@@ -3,6 +3,8 @@ import path from "path";
 import os from "os";
 import WebSocket from "ws";
 import YAML from "yaml";
+import dotenv from "dotenv";
+dotenv.config({ quiet: true });
 
 export const HOME_DIR = os.homedir();
 export const OPENBUG_DIR = path.join(HOME_DIR, ".openbug");
@@ -53,7 +55,7 @@ Usage:
   debug <your command>
 
 OpenBug requires a local server to be running:
-  debug cluster
+  debug
 
 Run your app with OpenBug watching it:
   debug <your command>
@@ -66,6 +68,7 @@ Run your app with OpenBug watching it:
 Commands:
   init         register the current project
   cluster      start the local OpenBug server
+  studio       open the local Studio web app (studio/dist)
   version      show version information
 
 Use --help with individual commands for details.
@@ -105,7 +108,7 @@ This command must be running before you execute:
   debug <your command>
 
 Usage:
-  debug cluster
+  debug
 
 Notes:
   • Keep this running in a separate terminal

@@ -14,14 +14,12 @@ import {
   loadProjectMetadata,
   getConfigValue,
 } from "./helpers/cli-helpers.js";
-import { extractMessageContent, groupMessageChunks } from "./utils.js";
 import {
-  BaseMessage,
-  HumanMessage,
-  AIMessage,
-  AIMessageChunk,
-} from "langchain";
-import { SystemMessage } from "@langchain/core/messages";
+  type CoreMessage,
+  extractMessageContent,
+  groupMessageChunks,
+  getAssistantDisplayContent,
+} from "./coreMessages.js";
 import stringWidth from "string-width";
 import WebSocket from "ws";
 
@@ -31,7 +29,7 @@ marked.use(
     showSectionPrefix: false,
     unescape: true,
     emoji: true,
-  })
+  }),
 );
 
 function wrapText(text: string, maxWidth: number): string[] {
@@ -129,7 +127,7 @@ async function fetchLogsFromCluster(
 
     const timeoutId = setTimeout(() => {
       logd(
-        `[fetchLogsFromCluster] Timeout waiting for logs for window_id: ${windowId}`
+        `[fetchLogsFromCluster] Timeout waiting for logs for window_id: ${windowId}`,
       );
       cleanup();
       resolve("");
@@ -138,17 +136,17 @@ async function fetchLogsFromCluster(
     socket.onopen = () => {
       try {
         logd(
-          `[fetchLogsFromCluster] Requesting logs for window_id: ${windowId}`
+          `[fetchLogsFromCluster] Requesting logs for window_id: ${windowId}`,
         );
         socket?.send(
           JSON.stringify({
             type: "fetch_logs",
             window_id: windowId,
-          })
+          }),
         );
       } catch (error) {
         logd(
-          `[fetchLogsFromCluster] Error sending fetch_logs request: ${error}`
+          `[fetchLogsFromCluster] Error sending fetch_logs request: ${error}`,
         );
         cleanup();
         resolve("");
@@ -163,12 +161,12 @@ async function fetchLogsFromCluster(
           clearTimeout(timeoutId);
           const logs = data.logs || "";
           logd(
-            `[fetchLogsFromCluster] Received ${logs.length} characters of logs for window_id: ${windowId}`
+            `[fetchLogsFromCluster] Received ${logs.length} characters of logs for window_id: ${windowId}`,
           );
           resolve(logs);
         } else if (data.type === "error") {
           logd(
-            `[fetchLogsFromCluster] Error from cluster server: ${data.message}`
+            `[fetchLogsFromCluster] Error from cluster server: ${data.message}`,
           );
           cleanup();
           resolve("");
@@ -187,7 +185,7 @@ async function fetchLogsFromCluster(
     socket.onclose = () => {
       if (!settled) {
         logd(
-          `[fetchLogsFromCluster] WebSocket closed before receiving response for window_id: ${windowId}`
+          `[fetchLogsFromCluster] WebSocket closed before receiving response for window_id: ${windowId}`,
         );
         cleanup();
         resolve("");
@@ -251,7 +249,7 @@ export const StartApp: React.FC = () => {
   >([]);
   const [chatInput, setChatInput] = useState("");
   const [terminalCols, setTerminalCols] = useState<number>(
-    stdout?.columns || 80
+    stdout?.columns || 80,
   );
   const [showFullChat, setShowFullChat] = useState(false);
 
@@ -268,6 +266,7 @@ export const StartApp: React.FC = () => {
       path: activeProject.path || process.cwd(),
     };
   }, [activeProject]);
+
   const {
     connectWebSocket,
     visibleChats,
@@ -303,7 +302,7 @@ export const StartApp: React.FC = () => {
             JSON.stringify({
               type: "subscribe_updates",
               id: "openbug-service",
-            })
+            }),
           );
           logd("Subscribed to cluster server for project updates");
         };
@@ -319,7 +318,7 @@ export const StartApp: React.FC = () => {
               const oncallServices = data.projects;
               setActiveConnections(oncallServices);
               logd(
-                `Project update received: ${oncallServices.length} active connection(s) for openbug-service`
+                `Project update received: ${oncallServices.length} active connection(s) for openbug-service`,
               );
             } else if (
               (data.type === "projects" ||
@@ -329,7 +328,7 @@ export const StartApp: React.FC = () => {
               const oncallServices = data.projects;
               setActiveConnections(oncallServices);
               logd(
-                `Found ${oncallServices.length} active connection(s) for openbug-service`
+                `Found ${oncallServices.length} active connection(s) for openbug-service`,
               );
             }
           } catch (error) {
@@ -402,13 +401,16 @@ export const StartApp: React.FC = () => {
     if (!value.trim() || !activeProject) {
       if (!activeProject) {
         logd(
-          "No active project available. Please wait for a service to register."
+          "No active project available. Please wait for a service to register.",
         );
       }
       return;
     }
 
-    const userMessage = new HumanMessage(value.trim());
+    const userMessage: CoreMessage = {
+      role: "user",
+      content: value.trim(),
+    };
     const updatedChats = [...visibleChats, userMessage];
     setVisibleChats(updatedChats);
     setChatResponseMessages((prev) => [...prev, userMessage]);
@@ -430,7 +432,7 @@ export const StartApp: React.FC = () => {
           //   `[handleSubmit] Fetching logs from cluster server for active project window_id: ${activeProject.window_id}`
           // );
           const logsFromCluster = await fetchLogsFromCluster(
-            activeProject.window_id
+            activeProject.window_id,
           );
 
           if (logsFromCluster && logsFromCluster.trim().length > 0) {
@@ -441,30 +443,30 @@ export const StartApp: React.FC = () => {
           } else {
             logs = "";
             console.log(
-              `[Logs] ⚠️  No logs found in cluster server for window_id: ${activeProject.window_id}. This might be normal if the service just started.`
+              `[Logs] ⚠️  No logs found in cluster server for window_id: ${activeProject.window_id}. This might be normal if the service just started.`,
             );
             logd(
-              `[handleSubmit] No logs available for window_id: ${activeProject.window_id}. Service might not have generated logs yet.`
+              `[handleSubmit] No logs available for window_id: ${activeProject.window_id}. Service might not have generated logs yet.`,
             );
           }
         } catch (error) {
           logs = "";
           console.log(
-            `[Logs] ❌ Failed to fetch logs from cluster server: ${error}`
+            `[Logs] ❌ Failed to fetch logs from cluster server: ${error}`,
           );
           logd(
-            `[handleSubmit] Error fetching logs from cluster server: ${error}`
+            `[handleSubmit] Error fetching logs from cluster server: ${error}`,
           );
         }
       }
     } else {
       if (!activeProject?.logs_available) {
         logd(
-          `[handleSubmit] Active project has logs_available=false, skipping log fetch`
+          `[handleSubmit] Active project has logs_available=false, skipping log fetch`,
         );
       } else if (!activeProject.window_id) {
         logd(
-          `[handleSubmit] Active project missing window_id, cannot fetch logs`
+          `[handleSubmit] Active project missing window_id, cannot fetch logs`,
         );
       }
       logs = "";
@@ -486,7 +488,7 @@ export const StartApp: React.FC = () => {
 
         if (!metadataForFetch && activeProject) {
           metadataForFetch = {
-            id: "openbug-service",
+            id: "oncall-service",
             path: activeProject.path || process.cwd(),
           };
         }
@@ -526,12 +528,11 @@ export const StartApp: React.FC = () => {
         return;
       }
 
-      const initialSystemMessage =
+      const initialAssistantContent =
         "I'm watching your app run locally. You can ask me about errors, logs, performance,or anything else related to this run.";
       const messagesToSend = updatedChats.filter((msg) => {
-        if (msg instanceof SystemMessage) {
-          const content = typeof msg.content === "string" ? msg.content : "";
-          return content !== initialSystemMessage;
+        if (msg.role === "assistant" && typeof msg.content === "string") {
+          return msg.content !== initialAssistantContent;
         }
         return true;
       });
@@ -542,9 +543,11 @@ export const StartApp: React.FC = () => {
     }
   };
 
-  const initialAssistantMessage = new SystemMessage(
-    "I'm watching your app run locally. You can ask me about errors, logs, performance,or anything else related to this run."
-  );
+  const initialAssistantMessage: CoreMessage = {
+    role: "assistant",
+    content:
+      "I'm watching your app run locally. You can ask me about errors, logs, performance,or anything else related to this run.",
+  };
 
   useInput((inputStr: string, key: any) => {
     if (inputStr === "c" && key.ctrl) {
@@ -581,45 +584,21 @@ export const StartApp: React.FC = () => {
     const groupedMessages = groupMessageChunks(messagesToRender).messages;
 
     return groupedMessages.flatMap((msgs, index) => {
-      const msgAny = msgs as any;
-      const msgType =
-        (typeof msgAny[0]?.getType === "function" && msgAny[0].getType()) ||
-        msgAny[0]?._type ||
-        msgs[0]?.constructor.name ||
-        "";
-      const isHuman =
-        msgType === "human" || msgs[0]?.constructor.name === "HumanMessage";
+      const first = msgs[0];
+      const isHuman = first.role === "user";
       const prefix = `${isHuman ? ">" : "⏺"} `;
       const prefixWidth = stringWidth(prefix);
 
-      let content = extractMessageContent(msgs);
-
-      const fMessage = msgs[0] as AIMessage;
-      if (fMessage.tool_calls && fMessage.tool_calls.length > 0) {
-        if (fMessage.tool_calls[0].name === "thinkTool") {
-          function extractThinkMessage(messages: AIMessageChunk[]): string {
-            if (messages.length < 5) return "";
-            return messages.slice(4, -3).reduce((prev, message) => {
-              if (
-                message.tool_call_chunks &&
-                message.tool_call_chunks[0] &&
-                message.tool_call_chunks[0].args
-              )
-                return prev + message.tool_call_chunks[0].args;
-              return prev;
-            }, "");
-          }
-          content = extractThinkMessage(msgs as AIMessageChunk[]);
-        } else {
-          content = `Calling: ${fMessage.tool_calls[0].name}`;
-        }
-      }
+      const content =
+        first.role === "assistant"
+          ? getAssistantDisplayContent(first)
+          : extractMessageContent(msgs);
 
       if (content === "") return [];
 
       const renderedContent = marked.parse(content) as string;
       const renderedLines = renderedContent.split("\n");
-      
+
       const messageLines = renderedLines.flatMap((line, lineIndex) => {
         const fullLine =
           lineIndex === 0 ? prefix + line : " ".repeat(prefixWidth) + line;
@@ -647,7 +626,7 @@ export const StartApp: React.FC = () => {
     const services = activeConnections
       .map(
         (c, i) =>
-          `  ${i + 1}. ${c.name || "Unnamed"} (${c.path || "unknown path"})`
+          `  ${i + 1}. ${c.name || "Unnamed"} (${c.path || "unknown path"})`,
       )
       .join("\n");
     return `Active connections (openbug-service): ${activeConnections.length} service(s)\n${services}`;
@@ -658,6 +637,7 @@ export const StartApp: React.FC = () => {
     if (!isConnected || isLoading) return;
     setChatInput(userInput);
   };
+
   return (
     <Box flexDirection="column" width="100%">
       <Text color="cyan" bold>
@@ -674,14 +654,7 @@ export const StartApp: React.FC = () => {
       )}
 
       {connectionError && (
-        <Box flexDirection="column" marginY={1} paddingX={1}>
-          <Text color="red" bold>⚠️  Connection Error</Text>
-          <Box marginTop={1} flexDirection="column">
-            {connectionError.split('\n').map((line, idx) => (
-              <Text key={idx} color="red">{line || ' '}</Text>
-            ))}
-          </Box>
-        </Box>
+        <Text color="red">Connection Error: {connectionError}</Text>
       )}
 
       {isConnected && (
@@ -696,18 +669,18 @@ export const StartApp: React.FC = () => {
                 isLoading
                   ? "AI is thinking, please wait..."
                   : isConnected
-                  ? "Type your message..."
-                  : "Connecting..."
+                    ? "Type your message..."
+                    : "Connecting..."
               }
             />
           </Box>
         </BorderBox>
       )}
 
-        <Text color="gray" dimColor>
-          {isConnected ? "● Connected" : "○ Disconnected"} | Press Ctrl+C to
-          exit | Press Ctrl+R to reset chat | Press Ctrl+A to toggle full chat
-        </Text>
+      <Text color="gray" dimColor>
+        {isConnected ? "● Connected" : "○ Disconnected"} | Press Ctrl+C to exit
+        | Press Ctrl+R to reset chat | Press Ctrl+A to toggle full chat
+      </Text>
     </Box>
   );
 };
