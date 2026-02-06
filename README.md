@@ -32,7 +32,7 @@ npm install -g @openbug/cli
 debug
 ```
 
-You'll be prompted to log in and paste an API key from [app.oncall.build](https://app.oncall.build).
+You'll be prompted to log in and paste an API key from [app.openbug.ai](https://app.openbug.ai).
 
 **Start debugging:**
 
@@ -209,7 +209,7 @@ Logs are streamed to the server only when the AI needs them to answer your quest
 
 **API key authentication**
 
-All requests are authenticated with your personal API key from [app.oncall.build](https://app.oncall.build).
+All requests are authenticated with your personal API key from [app.openbug.ai](https://app.openbug.ai).
 
 ---
 

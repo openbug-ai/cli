@@ -1,5 +1,8 @@
 import { Text } from "ink";
 import HorizontalLine from "./HorizontalLine.js";
+import pkg from "../../package.json" with { type: "json" };
+
+const version = pkg?.version || "1.0.0";
 
 const logo = `    
 
@@ -9,7 +12,7 @@ const logo = `
   ▐▌ ▐▌▐▛ ▜▌▐▙▄▟▌▐▛ ▐▌▐███ ▐▌ ▐▌▐▛ ▜▌
   ▐▌ ▐▌▐▌ ▐▌▐▛▀▀▘▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌
    █▄█ ▐█▄█▘▝█▄▄▌▐▌ ▐▌▐▙▄▟▌▐▙▄█▌▝█▄█▌
-   ▝▀▘ ▐▌▀▘  ▝▀▀ ▝▘ ▝▘▝▀▀▀  ▀▀▝▘ ▞▀▐▌ v1.0.0
+   ▝▀▘ ▐▌▀▘  ▝▀▀ ▝▘ ▝▘▝▀▀▀  ▀▀▝▘ ▞▀▐▌ v${version}
        ▐▌                        ▜█▛▘
 
 `;
