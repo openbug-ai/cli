@@ -8,12 +8,19 @@
 
 > Real-time AI debugging for running applications
 
+[![Beta](https://img.shields.io/badge/status-beta-orange.svg)](https://github.com/openbug-ai/cli)
 [![npm](https://img.shields.io/npm/v/@openbug/cli?style=flat-square)](https://www.npmjs.com/package/@openbug/cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 Capture logs automatically, search your codebase in natural language, and chat with an AI that understands your entire system.
 
 ![loading animation](assets/openbug.gif)
+
+---
+
+## Status
+
+🚧 **Beta** - OpenBug is actively developed and maintained. We ship updates regularly and welcome feedback.
 
 ---
 
@@ -102,6 +109,39 @@ Terminal 1: AI Assistant          Terminal 2: Your Service
 5. Responses flow back through cluster to your terminal
 
 Run multiple services in different terminals—they all connect to the same cluster, so the AI can debug across your entire system.
+
+---
+
+## Privacy & Security
+
+**Your code stays local**
+
+Your codebase is accessed locally and never uploaded. Only specific code snippets that the AI queries are sent to the server.
+
+**Selective log sharing**
+
+Logs are streamed to the server only when the AI needs them to answer your questions. You control what runs with `debug <command>`.
+
+**API key authentication**
+
+All requests are authenticated with your personal API key from [app.oncall.build](https://app.oncall.build).
+
+---
+
+## Self-Hosting
+
+To run your own OpenBug server:
+
+1. Clone the [server repository](https://github.com/openbug-ai/server)
+2. Configure with your OpenAI API key
+3. Point the CLI to your server:
+
+```bash
+export WEB_SOCKET_URL=ws://localhost:3000/v2/ws
+export API_BASE_URL=http://localhost:3000/v2/api
+```
+
+See the [server README](https://github.com/openbug-ai/server) for full setup instructions.
 
 ---
 
@@ -194,39 +234,6 @@ API_BASE_URL=https://api.oncall.build/v2/api
 WEB_SOCKET_URL=wss://api.oncall.build/v2/ws
 OPENBUG_CLUSTER_URL=ws://127.0.0.1:4466
 ```
-
----
-
-## Privacy & Security
-
-**Your code stays local**
-
-Your codebase is accessed locally and never uploaded. Only specific code snippets that the AI queries are sent to the server.
-
-**Selective log sharing**
-
-Logs are streamed to the server only when the AI needs them to answer your questions. You control what runs with `debug <command>`.
-
-**API key authentication**
-
-All requests are authenticated with your personal API key from [app.openbug.ai](https://app.openbug.ai).
-
----
-
-## Self-Hosting
-
-To run your own OpenBug server:
-
-1. Clone the [server repository](https://github.com/openbug-ai/server)
-2. Configure with your OpenAI API key
-3. Point the CLI to your server:
-
-```bash
-export WEB_SOCKET_URL=ws://localhost:3000/v2/ws
-export API_BASE_URL=http://localhost:3000/v2/api
-```
-
-See the [server README](https://github.com/openbug-ai/server) for full setup instructions.
 
 ---
 
