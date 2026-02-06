@@ -1,16 +1,21 @@
-# OpenBug CLI (`@openbug/cli`)
+# OpenBug
 
-**OpenBug – AI debugging copilot for running applications**
+<p align="center">
+  <a href="https://openbug.ai">
+    <img src="assets/openbug-logo.png" alt="OpenBug" width="500">
+  </a>
+</p>
 
-This CLI wraps your existing dev commands (like `npm run dev`) with:
+> Real-time AI debugging for running applications
 
-## Features
+[![npm](https://img.shields.io/npm/v/@openbug/cli?style=flat-square)](https://www.npmjs.com/package/@openbug/cli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
-- 🤖 **AI-Powered Debugging**: Get intelligent assistance while debugging your applications
-- 📊 **Real-time Log Analysis**: View and analyze command output logs in real-time
-- 🔍 **Code Search**: Search through your codebase with AI assistance
-- 💬 **Interactive Chat**: Chat with AI about your debugging issues
-- 🚀 **Easy Setup**: Get started in minutes with simple initialization
+Capture logs automatically, search your codebase in natural language, and chat with an AI that understands your entire system.
+
+![loading animation](assets/openbug.gif)
+
+---
 
 ## Installation
 
@@ -18,232 +23,261 @@ This CLI wraps your existing dev commands (like `npm run dev`) with:
 npm install -g @openbug/cli
 ```
 
-Requirements:
-
-- Node.js **20+**
-- npm or yarn
-
----
-
 ## Quick Start
 
-1. Start OpenBug without running a command yet:
-
-   ```bash
-   debug
-   ```
-
-   On first run, you’ll be prompted for an **API key**.  
-   Get one from the OpenBug dashboard: [`https://app.oncall.build/`](https://app.oncall.build/).
-
-2. After the key is saved, run your dev command under OpenBug:
-
-   ```bash
-   debug npm run dev
-   debug python app.py
-   debug node server.js
-   ```
-
-3. OpenBug will:
-   - Create/update `~/.openbug/config` with your `API_KEY`
-   - Create `openbug.yaml` in the current directory if it doesn’t exist
-   - Start your command and open the AI debugging TUI
-
-4. (Optional) If you prefer a browser UI, start the Studio web app:
-
-   ```bash
-   debug studio
-   ```
-
-   This opens the local Studio UI, which connects to the same project and services.
-
----
-
-## Core Concepts
-
-- **API key**: Stored in `~/.openbug/config` as `API_KEY=…`. Required before any AI calls.
-- **Project metadata (`openbug.yaml`)**: Lives in each service’s directory, identifies the service to OpenBug.
-- **Cluster server**: A small local WebSocket server that aggregates logs and connections from all `debug <command>` processes.
-
-The CLI tries to make all of this **automatic**:
-
-- If you don’t have an API key, the first run will prompt you to log in / enter one.
-- If there is no `openbug.yaml` in the current directory, `debug <command>` will walk you through creating it.
-- When you start debugging, the cluster server and AI service are started for you if they are not already running.
-
----
-
-## First‑time Setup
-
-### 1. Authenticate (API key)
-
-The recommended flow is **interactive**:
-
-- Run `debug` (or `debug <command>`) and follow the on‑screen prompt.
-- Paste an API key from the OpenBug dashboard: [`https://app.oncall.build/`](https://app.oncall.build/).
-- The CLI will create `~/.openbug/config` if needed and persist:
-
-  ```ini
-  API_KEY=<YOUR_OPENBUG_API_KEY>
-  ```
-
-All subsequent `debug` commands will reuse this key automatically.
-
-### 2. Register a project (`openbug.yaml`)
-
-You can create metadata explicitly by simply run your dev command:
+**First time setup:**
 
 ```bash
+# Terminal 1: Start the AI assistant
+debug
+```
+
+You'll be prompted to log in and paste an API key from [app.oncall.build](https://app.oncall.build).
+
+**Start debugging:**
+
+```bash
+# Terminal 2: Run any command with debugging
 debug npm run dev
 debug python app.py
-debug node server.js
+debug docker-compose up
 ```
 
-If **no `openbug.yaml`** exists in the current directory, OpenBug will:
-
-- Prompt you for a short description
-- Generate an `openbug.yaml`
-- Register the service with the local cluster so it shows up in the UI
-
-If `openbug.yaml` **already exists**, `debug <command>` will:
-
-- Use the existing metadata
-- Stream logs from the new process into the same project context
-- Immediately show you the logs/AI chat without prompting again
-
-Example `openbug.yaml`:
-
-```yaml
-id: "openbug-service"
-description: "Test service (local dev)"
-name: "openbug-test-service"
-window_id: 1738579212345
-logs_available: true
-code_available: true
-```
+Your application runs normally with logs visible. Behind the scenes, OpenBug captures logs, accesses your codebase locally, and makes everything available to the AI assistant running in Terminal 1.
 
 ---
 
-## Everyday Usage
+## Why OpenBug?
 
-### Start debugging a service
+**Stop context-switching between logs and code**
 
-From your service directory:
+Ask "why is the auth endpoint failing?" and get answers based on actual runtime logs plus relevant code from your codebase—not generic suggestions.
 
-```bash
-debug npm run dev
-debug python app.py
-debug node server.js
+**Debug across multiple services**
+
+No more grepping through logs in 5 different terminals. OpenBug sees logs from all connected services and can trace issues across your entire stack.
+
+**Understand unfamiliar codebases**
+
+Search in natural language: "where do we handle payment webhooks?" The AI searches your actual codebase, not the internet.
+
+---
+
+## How It Works
+
+```
+Terminal 1: AI Assistant          Terminal 2: Your Service
+┌─────────────────────────┐       ┌──────────────────────────┐
+│ $ debug                 │       │ $ debug npm run dev      │
+│                         │       │ Server running on :3000  │
+│ You: "Why is auth       │       │ [logs stream normally]   │
+│      failing?"          │       │                          │
+│                         │◄──────┤ Logs captured            │
+│ AI: [analyzes logs +    │       │ Code accessed locally    │
+│      searches codebase] │       │ Connected to cluster     │
+└─────────────────────────┘       └──────────────────────────┘
+          ▲                                  ▲
+          │                                  │
+          └────────── Local Cluster ─────────┘
+                   (ws://127.0.0.1:4466)
+                            │
+                            │ WebSocket
+                            ↓
+                ┌────────────────────────────┐
+                │   OpenBug AI Server        │
+                │                            │
+                │  ┌──────────────────────┐  │
+                │  │   Agent Graph        │  │
+                │  │  • Analyze logs      │  │
+                │  │  • Search codebase   │  │
+                │  │  • Generate insights │  │
+                │  └──────────────────────┘  │
+                └────────────────────────────┘
 ```
 
-What happens:
+1. `debug` starts the AI assistant and connects to a local cluster server
+2. `debug <command>` runs your service and streams logs to the cluster
+3. Local cluster connects to OpenBug AI server via WebSocket
+4. Agent Graph processes queries, searches code, and analyzes logs
+5. Responses flow back through cluster to your terminal
 
-- Ensures `~/.openbug/config` exists and contains an `API_KEY`
-  - If missing, you’ll be prompted to log in / paste an auth key
-- Ensures a local cluster server is running
-- Ensures `openbug.yaml` exists (creating it on first run)
-- Starts your command
-- Opens the TUI where you can:
-  - See live logs from the process
-  - Chat with the AI about errors, behavior, etc.
-  - Let the AI call tools (`grep`, `read_file`, `read_logs`, etc.) against your project
+Run multiple services in different terminals—they all connect to the same cluster, so the AI can debug across your entire system.
 
-You can repeat this in multiple terminals for multiple services; they will all register under the same project id and appear in the AI context.
+---
 
-### Attach UI only
+## Typical Workflow
 
+**Multi-service debugging:**
+
+```bash
+# Terminal 1: AI Assistant
+debug
+
+# Terminal 2: Backend
+cd backend
+debug npm run dev
+
+# Terminal 3: Frontend
+cd frontend
+debug npm start
+
+# Back to Terminal 1 (AI)
+> "Users can't log in, what's wrong?"
+> "Show me logs from the last auth request"
+> "Where do we validate JWT tokens?"
+```
+
+The AI sees logs from both services and can search code in both repos.
+
+---
+
+## OpenBug vs AI Coding Assistants
+
+| Feature | OpenBug | Cursor/Copilot/Windsurf |
+|---------|---------|-------------------------|
+| Sees runtime logs | ✓ | ✗ |
+| Multi-service debugging | ✓ | ✗ |
+| Natural language log analysis | ✓ | ✗ |
+| Works with running apps | ✓ | Static analysis only |
+
+OpenBug coordinates debugging agents that see what's actually happening when your code runs.
+
+---
+
+## Commands
+
+**Start AI assistant:**
 ```bash
 debug
 ```
 
-This:
-
-- Starts the cluster server and AI service (if not already running)
-- Connects to any `debug <command>` processes already running for the active project
-- Opens the TUI so you can switch between connected services and chat about them
-
-Use this when your services are already running and you just want the OpenBug UI.
-
----
-
-## CLI Commands
-
-All commands are invoked via the `debug` binary:
-
-
-### `debug <command>...`
-
-Run any command under the OpenBug debugger:
-
+**Run with debugging:**
 ```bash
-debug npm run dev
-debug python manage.py runserver
-debug node server.js
+debug <any-command>
 ```
 
-This is the main entry point you’ll use day‑to‑day.
-
-OpenBug stores its configuration in `~/.openbug/config`. You can manually edit this file if needed.
-
-Manually start the local cluster server.  
-Normally you don’t need this—`debug`/`debug <command>` will start it for you—but it’s available if you prefer to manage it in a dedicated terminal.
-
-### `debug studio`
-
-Open the local Studio web UI when available.
+**Open browser UI:**
+```bash
+debug studio
+```
 
 ---
 
-## Keyboard Shortcuts (TUI)
+## Configuration
 
-Exact shortcuts may evolve, but in the current TUI:
+### First-Time Project Setup
 
-- **Ctrl+C** – Exit
-- **Ctrl+D** – Toggle between main views (chat/logs) depending on context
-- **Ctrl+R** – Reconnect / reset chat in some views (see bottom status line)
-- **Ctrl+O** – Toggle full vs trimmed chat history in the studio UI
+When you run `debug <command>` for the first time in a directory, OpenBug will:
 
-The bottom status line of the TUI always reflects the currently‑supported shortcuts for that build.
+1. Prompt for a project description
+2. Create an `openbug.yaml` file
+3. Register the service with the local cluster
 
----
-
-## Configuration & Environment
+Example `openbug.yaml`:
 
 ```yaml
-id: "openbug-service"
-description: "Your project description"
-name: "Project Name"
-window_id: 1234567890
+id: "my-api-service"
+name: "api-service"
+description: "Express API with PostgreSQL"
 logs_available: true
 code_available: true
 ```
 
-## Environment Variables
+On subsequent runs, OpenBug uses the existing configuration automatically.
 
+### Environment Variables
 
-- `API_BASE_URL`: Base URL for the OpenBug API (default: `https://api.oncall.build/v2/api`)
-- `WEB_SOCKET_URL`: WebSocket URL (default: `wss://api.oncall.build/v2/ws`)
-- `OPENBUG_CLUSTER_URL`: WebSocket URL for the cluster server (default: `ws://127.0.0.1:4466`)
-- `OPENBUG_WS_PORT`: Port for the WebSocket server (default: `6111`)
-- `OPENBUG_WS_HOST`: Host for the WebSocket server (default: `127.0.0.1`)
+Override defaults by setting these in `~/.openbug/config` or as environment variables:
 
-## Keyboard Shortcuts
+```bash
+API_BASE_URL=https://api.oncall.build/v2/api
+WEB_SOCKET_URL=wss://api.oncall.build/v2/ws
+OPENBUG_CLUSTER_URL=ws://127.0.0.1:4466
+```
 
 ---
 
-## Contributing / Support
+## Privacy & Security
 
-This `opensource/cli` package is designed to be readable and hackable by experienced engineers:
+**Your code stays local**
 
-- The main entry point is `bin/openbug.js`
-- The Ink TUI lives in `index.tsx` and `src/components/*`
-- Helper utilities live in `helpers/*` and `src/utils/*`
+Your codebase is accessed locally and never uploaded. Only specific code snippets that the AI queries are sent to the server.
 
-If you’d like to contribute improvements, bug fixes, or new tools, please open issues and pull requests in the repository that hosts this package.
+**Selective log sharing**
+
+Logs are streamed to the server only when the AI needs them to answer your questions. You control what runs with `debug <command>`.
+
+**API key authentication**
+
+All requests are authenticated with your personal API key from [app.oncall.build](https://app.oncall.build).
+
+---
+
+## Self-Hosting
+
+To run your own OpenBug server:
+
+1. Clone the [server repository](https://github.com/openbug-ai/server)
+2. Configure with your OpenAI API key
+3. Point the CLI to your server:
+
+```bash
+export WEB_SOCKET_URL=ws://localhost:3000/v2/ws
+export API_BASE_URL=http://localhost:3000/v2/api
+```
+
+See the [server README](https://github.com/openbug-ai/server) for full setup instructions.
+
+---
+
+## Keyboard Shortcuts
+
+**Terminal UI:**
+- `Ctrl+C` – Exit
+- `Ctrl+D` – Toggle chat/logs view
+- `Ctrl+R` – Reconnect/reload
+
+**Browser UI:**
+- `Ctrl+O` – Toggle full/trimmed chat history
+
+Current shortcuts are shown in the bottom status bar.
+
+---
+
+## Requirements
+
+- Node.js 20+
+- npm, yarn, or bun
+
+---
+
+## Documentation
+
+For advanced usage, custom integrations, and troubleshooting:
+
+**[Full Documentation →](https://docs.openbug.ai/)**
+
+---
+
+## Contributing
+
+The codebase is designed to be readable and hackable:
+
+- Entry point: `bin/openbug.js`
+- TUI components: `index.tsx` and `src/components/*`
+- Utilities: `helpers/*` and `src/utils/*`
+
+Pull requests and issues welcome!
+
+---
+
+## Support
+
+- [Documentation](https://docs.openbug.ai/)
+- [GitHub Issues](https://github.com/openbug-ai/cli/issues)
 
 ---
 
 ## License
 
-MIT
-
+[MIT](LICENSE)
