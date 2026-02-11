@@ -54,6 +54,23 @@ Your application runs normally with logs visible. Behind the scenes, OpenBug cap
 
 ---
 
+## 🎯 Try the Interactive Demo
+
+**New to OpenBug?** See it debug 3 realistic bugs in under 5 minutes—no installation required.
+
+[![Try Demo in Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/openbug-ai/demo?quickstart=1)
+
+**What's included:**
+- 2 microservices with real bugs (schema drift, config errors, race conditions)
+- Step-by-step walkthroughs of OpenBug investigating each issue
+- See exactly how OpenBug correlates logs and searches code across services
+
+Perfect for understanding OpenBug's capabilities before connecting your own services.
+
+[View demo repository →](https://github.com/openbug-cli/demo)
+
+---
+
 ## Why OpenBug?
 
 **Stop context-switching between logs and code**
