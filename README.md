@@ -67,7 +67,7 @@ Your application runs normally with logs visible. Behind the scenes, OpenBug cap
 
 Perfect for understanding OpenBug's capabilities before connecting your own services.
 
-[View demo repository →](https://github.com/openbug-cli/demo)
+[View demo repository →](https://github.com/openbug-ai/demo)
 
 ---
 
